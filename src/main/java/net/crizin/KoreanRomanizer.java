@@ -12,12 +12,16 @@ import java.util.regex.Pattern;
  * It is implemented based on the National Korean Language Romanization and can be covered a lot,
  * but it is not perfect because it is difficult to implement 100% if there is no word dictionary data due to the nature of Korean.
  */
+/**
+ * @author bizno
+ *
+ */
 public class KoreanRomanizer {
 	private static final Pattern doubleSurnames = Pattern.compile("^(\\s*)(강전|남궁|독고|동방|등정|망절|무본|사공|서문|선우|소봉|어금|장곡|제갈|황목|황보)(.{1,10})$");
 	private static final Pattern districtPostfixes = Pattern.compile("^(.{1,20}?)(특별자치도|특별자치시|특별시|광역시|대로|구|군|도|동|리|면|시|읍|가|길|로)(\\s*)$");
 	private static final Pattern districtPostfixesWithNumbers1 = Pattern.compile("^(.{0,20}?)(\\d+)(\\s*)(가길|가|번길|로|단지|동)(\\s*)$");
 	private static final Pattern districtPostfixesWithNumbers2 = Pattern.compile("^(.{0,20}?)(대?로)\\s*(\\d+[가번]?)(길)(\\s*)$");
-	private static final Map<String, String> typicalSurenameRules = new HashMap<String, String>() {
+	private static final Map<String, String> typicalSurnameRules = new HashMap<String, String>() {
 		{
 			put("가", "Ka");
 			put("간", "Kan");
@@ -93,7 +97,7 @@ public class KoreanRomanizer {
 	 * 		if argument string is null
 	 */
 	public static String romanize(String string) {
-		return romanize(string, null, null);
+		return romanize(string, null, null, null);
 	}
 
 	/**
@@ -108,7 +112,7 @@ public class KoreanRomanizer {
 	 * 		if argument string is null
 	 */
 	public static String romanize(String string, KoreanCharacter.ConsonantAssimilation consonantAssimilation) {
-		return romanize(string, null, consonantAssimilation);
+		return romanize(string, null, consonantAssimilation, null);
 	}
 
 	/**
@@ -123,7 +127,22 @@ public class KoreanRomanizer {
 	 * 		if argument string is null
 	 */
 	public static String romanize(String string, KoreanCharacter.Type type) {
-		return romanize(string, type, null);
+		return romanize(string, type, null, null);
+	}
+	
+	/**
+	 * Romanize string with type option.
+	 *
+	 * @param string
+	 * 		the string to convert to roman string.
+	 * @param type
+	 * 		the type of word
+	 * @return the romanized string.
+	 * @throws NullPointerException
+	 * 		if argument string is null
+	 */
+	public static String romanize(String string, KoreanCharacter.Type type, KoreanCharacter.BetweenType betweenType) {
+		return romanize(string, type, null, betweenType);
 	}
 
 	/**
@@ -139,16 +158,17 @@ public class KoreanRomanizer {
 	 * @throws NullPointerException
 	 * 		if string parameter is null
 	 */
-	public static String romanize(String string, KoreanCharacter.Type type, KoreanCharacter.ConsonantAssimilation consonantAssimilation) {
+	public static String romanize(String string, KoreanCharacter.Type type, KoreanCharacter.ConsonantAssimilation consonantAssimilation, KoreanCharacter.BetweenType betweenType) {
 		Objects.requireNonNull(string, "String should not be null.");
 
+		betweenType = (betweenType == null) ? KoreanCharacter.BetweenType.Normal : betweenType;
 		consonantAssimilation = (consonantAssimilation == null) ? KoreanCharacter.ConsonantAssimilation.Regressive : consonantAssimilation;
 		type = (type == null) ? KoreanCharacter.Type.Typical : type;
 
 		switch (type) {
 			case Name:
 			case NameTypical:
-				string = normalizeName(string, type);
+				string = normalizeName(string, type, betweenType);
 				break;
 			case District:
 				string = normalizeDistrict(string);
@@ -170,7 +190,7 @@ public class KoreanRomanizer {
 				String pronunciation = currentCharacter.getRomanizedString(prevCharacter, nextCharacter, consonantAssimilation, type);
 
 				if (prevCharacter == null || !prevCharacter.isKoreanCharacter()) {
-					if (type == KoreanCharacter.Type.District && prevCharacter != null && (prevCharacter.toString().equals("-") || Character.isDigit(prevCharacter.getCharacter()))) {
+					if ((type == KoreanCharacter.Type.District && prevCharacter != null && (prevCharacter.toString().equals("-") || Character.isDigit(prevCharacter.getCharacter()))) || ((type == KoreanCharacter.Type.Name || type == KoreanCharacter.Type.NameTypical) && prevCharacter.toString().equals("-") && betweenType == KoreanCharacter.BetweenType.Hyphen)) {
 						buffer.append(pronunciation);
 					} else {
 						buffer.append(Character.toUpperCase(pronunciation.charAt(0)));
@@ -218,7 +238,7 @@ public class KoreanRomanizer {
 		}
 
 		while (scanner.hasNext()) {
-			System.out.println(KoreanRomanizer.romanize(scanner.nextLine(), type, consonantAssimilation));
+			System.out.println(KoreanRomanizer.romanize(scanner.nextLine(), type, consonantAssimilation, null));
 		}
 	}
 
@@ -229,22 +249,49 @@ public class KoreanRomanizer {
 	 * 	 	the type of word
 	 * @return the normalized name string.
 	 */
-	private static String normalizeName(String string, KoreanCharacter.Type type) {
+	private static String normalizeName(String string, KoreanCharacter.Type type, KoreanCharacter.BetweenType betweenType) {
 		Matcher matcher = doubleSurnames.matcher(string);
-
+		String name;
+		boolean isfind = matcher.find();
+		
+		name = processBetweenNameLetters(isfind ? matcher.group(3) : string.substring(1), betweenType);
+		
 		if (type == KoreanCharacter.Type.NameTypical) {
-			if (matcher.find()) {
-				return matcher.group(1) + typicalSurenameRules.getOrDefault(matcher.group(2), matcher.group(2)) + " " + matcher.group(3);
+			if (isfind) {
+				return matcher.group(1) + typicalSurnameRules.getOrDefault(matcher.group(2), matcher.group(2)) + " " + name;
 			} else {
-				return typicalSurenameRules.getOrDefault(String.valueOf(string.charAt(0)), String.valueOf(string.charAt(0))) + " " + string.substring(1);
+				return typicalSurnameRules.getOrDefault(String.valueOf(string.charAt(0)), String.valueOf(string.charAt(0))) + " " + name;
 			}
 		} else {
-			if (matcher.find()) {
-				return matcher.group(1) + matcher.group(2) + " " + matcher.group(3);
+			if (isfind) {
+				return matcher.group(1) + matcher.group(2) + " " + name;
 			} else {
-				return string.charAt(0) + " " + string.substring(1);
+				return string.charAt(0) + " " + name;
 			}
 		}
+	}
+	
+	/**
+	 * @param name
+	 * 		the name without surname.
+	 * @param between
+	 * 		the type of between.
+	 * @return the between processed name.
+	 */
+	private static String processBetweenNameLetters(String name, KoreanCharacter.BetweenType betweenType) {
+		switch (betweenType) {
+		case Space: 
+			name = String.join(" ", name.split(""));
+			break;
+		case Hyphen:
+			if (name.length() == 2) {
+				name = name.substring(0, 1) + "-" + name.substring(1);
+			}
+			break;
+		default:
+			break;
+		}
+		return name;
 	}
 
 	/**

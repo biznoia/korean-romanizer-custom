@@ -64,6 +64,26 @@ public class KoreanCharacter implements Serializable, Comparable<KoreanCharacter
 		 */
 		Typical
 	}
+	
+	/**
+	 * Character types between name letters.
+	 */
+	public enum BetweenType {
+		/**
+		 * Will nothing happen.
+		 */
+		Normal,
+		
+		/**
+		 * Space between all letters.
+		 */
+		Space,
+		
+		/**
+		 * Hyphen between two name letters.
+		 */
+		Hyphen
+	}
 
 	/**
 	 * The consonant used as the final syllable of Hangul, which is called "Jongsung".
